@@ -27,6 +27,10 @@ SNAPSHOT_PATH = Path(__file__).with_name("snapshot.json")
 
 PAGE_TIMEOUT_MS = 30_000  # 30 second timeout on page load / waits
 TOP_N = 20
+# Open division lives in the #player container; women's is in #playerW. Scope to
+# #player so we never accidentally fingerprint the women's table (they update at
+# the same time, so reading the wrong one would fire a false "updated" alert).
+OPEN_TABLE_SELECTOR = "#player"
 
 
 def load_snapshot():
@@ -45,13 +49,15 @@ def save_snapshot(snapshot):
 
 
 def extract_fingerprint(page):
-    """Return a list of "name|rating" strings for the top N players.
+    """Return a list of "name|rating" strings for the top N OPEN-division players.
 
-    Reads the first rendered data table on the page (the Shiny app's default view
-    is the open-division rankings). Each row contributes a name and the first
-    decimal-looking number found in that row (the Glicko-2 rating).
+    The page renders multiple DataTables (open in the #player container, women's
+    in #playerW). DataTables' auto-assigned table ids (DataTables_Table_0/_1) are
+    ordered by init time and are NOT stable, so we must scope to the semantic
+    #player container to always read the open division. Each row contributes a
+    name and the first decimal-looking number in that row (the Glicko-2 rating).
     """
-    rows = page.query_selector_all("table tbody tr")
+    rows = page.query_selector_all(f"{OPEN_TABLE_SELECTOR} tbody tr")
     fingerprint = []
     for row in rows:
         cells = [c.inner_text().strip() for c in row.query_selector_all("td")]
@@ -85,8 +91,11 @@ def scrape():
             page = browser.new_page()
             page.set_default_timeout(PAGE_TIMEOUT_MS)
             page.goto(RANKINGS_URL, timeout=PAGE_TIMEOUT_MS, wait_until="load")
-            # Wait for the rankings table to be rendered before extracting.
-            page.wait_for_selector("table tbody tr td", timeout=PAGE_TIMEOUT_MS)
+            # Wait for the OPEN-division table rows specifically (not just any
+            # table) before extracting.
+            page.wait_for_selector(
+                f"{OPEN_TABLE_SELECTOR} tbody tr td", timeout=PAGE_TIMEOUT_MS
+            )
             fingerprint = extract_fingerprint(page)
             if not fingerprint:
                 raise RuntimeError("No ranking rows could be extracted from the page")
