@@ -1,6 +1,8 @@
 # NATS Rankings Monitor
 
-This project watches the [NATS (USA Roundnet) Glicko-2 rankings](https://jmhyman.shinyapps.io/USAR-Rankings/) and posts a Slack notification whenever the top of the open division changes. A GitHub Actions workflow runs every 6 hours: it uses Playwright to scrape the JavaScript-rendered Shiny app, fingerprints the top 20 players' names and ratings, and — if the fingerprint differs from the last run — posts a static message to a Slack Incoming Webhook and commits an updated `snapshot.json`. If nothing changed or the page fails to load, it exits quietly and leaves the snapshot untouched. The only configuration you need is a single GitHub Secret.
+This project watches the [NATS (USA Roundnet) Glicko-2 rankings](https://jmhyman.shinyapps.io/USAR-Rankings/) and posts a Slack notification whenever the top of the **open division** changes. A GitHub Actions workflow runs every 30 minutes: it uses Playwright to scrape the JavaScript-rendered Shiny app, fingerprints the top 20 open-division players' names and ratings, and — if the fingerprint differs from the last run — posts a static message to a Slack Incoming Webhook and commits an updated `snapshot.json`. If nothing changed or the page fails to load, it exits quietly and leaves the snapshot untouched. The only configuration you need is a single GitHub Secret.
+
+> **Why "open division" specifically:** the Shiny page renders several tables (open lives in the `#player` container, women's in `#playerW`). The scraper scopes to `#player` so it always fingerprints the open division — the two divisions update at the same time, and reading the wrong one would fire a false "updated" alert.
 
 ## Deploy in under five minutes
 
@@ -8,7 +10,7 @@ This project watches the [NATS (USA Roundnet) Glicko-2 rankings](https://jmhyman
 2. **Create a Slack Incoming Webhook** (see below) and copy its URL.
 3. **Add the webhook as a secret:** in your repo go to **Settings → Secrets and variables → Actions → New repository secret**. Name it exactly `SLACK_WEBHOOK_URL` and paste the webhook URL as the value.
 4. **Enable workflows:** open the **Actions** tab. If prompted with "Workflows aren't being run on this forked repository," click **I understand my workflows, go ahead and enable them**.
-5. **Done.** The monitor now runs automatically every 6 hours.
+5. **Done.** The monitor now runs automatically every 30 minutes.
 
 The very first run establishes a baseline snapshot without sending a notification, so you won't get a spurious alert on day one. Every run after that notifies only when the rankings actually change.
 
@@ -32,6 +34,16 @@ When the rankings change, the channel receives:
 3. Click **Run workflow**, pick the branch (usually `main`), and click the green **Run workflow** button.
 
 The run appears in the list within a few seconds; click it to watch the logs.
+
+## Adjusting the schedule
+
+The cadence is the `cron` line in `.github/workflows/monitor.yml`:
+
+```yaml
+- cron: "*/30 * * * *"   # every 30 minutes
+```
+
+Change it to suit (`0 * * * *` hourly, `0 */6 * * *` every 6 hours). Note that on a **private** repo, Actions minutes count against your monthly allowance (each run is billed as ~1 minute), so every 30 minutes is ~1,440 min/month — comfortably under the 2,000-minute free tier but worth keeping in mind. On a **public** repo, Actions minutes are unlimited and free.
 
 ## How state works
 
