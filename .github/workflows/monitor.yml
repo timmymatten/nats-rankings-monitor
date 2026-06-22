@@ -2,8 +2,8 @@ name: NATS Rankings Monitor
 
 on:
   schedule:
-    # Every 6 hours, on the hour.
-    - cron: "0 */6 * * *"
+    # Every 30 minutes.
+    - cron: "*/30 * * * *"
   workflow_dispatch: {}
 
 permissions:
