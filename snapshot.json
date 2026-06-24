@@ -1,13 +1,12 @@
 {
-  "checks_paused_until": "2026-06-27T00:00:00-04:00",
   "players": {
     "TIM MATTEN|open": {
       "division": "open",
       "name": "TIM MATTEN",
-      "rank": 216,
-      "rating": 1624.29,
+      "rank": 230,
+      "rating": 1600.0,
       "slack_id": "U07KH5RJ9KR",
-      "tier": "Silver"
+      "tier": "Bronze"
     }
   },
   "top_fingerprint": [
