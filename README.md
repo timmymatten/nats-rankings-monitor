@@ -48,7 +48,7 @@ NATS tournaments only happen on **Saturdays**, so once a change is detected, no 
 3. **Add two repository secrets** (**Settings → Secrets and variables → Actions → New repository secret**):
    - `SLACK_BOT_TOKEN` — the bot's `xoxb-…` token
    - `SLACK_CHANNEL_ID` — the `C…` ID of the channel for the public message
-4. **Fill `roster.json`** with the people you want to track (see above). Use `tools/list_slack_users.py` to look up member IDs.
+4. **Fill `roster.json`** with the people you want to track (see above). Use `tools/list_slack_users.py` to look up member IDs, then `tools/validate_roster.py` to confirm every name matches the rankings.
 5. **Enable workflows** in the **Actions** tab if prompted.
 6. **Done.** Runs every 30 minutes. The first run establishes a baseline silently (no messages); after that it only notifies on real changes.
 
@@ -74,9 +74,20 @@ SLACK_BOT_TOKEN=xoxb-... SLACK_CHANNEL_ID=C0123ABCD python tools/list_slack_user
 ```
 Prints `Real Name -> U-ID`. (Channel-narrowing also needs a `channels:read`/`groups:read` scope; without it the script lists the whole workspace.) You can also copy an ID manually from a person's Slack profile → **⋮ More → Copy member ID**.
 
+### Validating the roster
+
+Player names must match the rankings page exactly (after uppercasing + collapsing whitespace). Matching at runtime is **exact, never fuzzy** — a wrong guess could DM the wrong person — so a name that doesn't match is simply logged and skipped. Catch mismatches *before* deploying:
+
+```bash
+python tools/validate_roster.py
+```
+It scrapes both divisions and, for every entry, prints ✓ with the player's rank/rating/tier or ✗ with the closest suggested spellings (handy for nicknames, accents like `JÉ GAGNON`, typos, or `JR.` punctuation). It also flags a name that appears in a division you didn't list. Copying names **directly from the rankings page** avoids mismatches entirely.
+
 ## Manually triggering a run
 
-**Actions** tab → **NATS Rankings Monitor** → **Run workflow** → pick the branch → **Run workflow**. If checks are paused between tournaments, toggle **Bypass the until-Saturday pause and check now** on to force a check.
+**Actions** tab → **NATS Rankings Monitor** → **Run workflow** → pick the branch → **Run workflow**. Two optional inputs:
+- **Bypass the until-Saturday pause and check now** — toggle on to force a check while paused between tournaments.
+- **message_prefix** — text prepended to every Slack message (e.g. `TEST `) so test runs are obviously distinguishable from real ones. Leave blank for normal runs; scheduled runs never set it.
 
 ## Adjusting the schedule
 
