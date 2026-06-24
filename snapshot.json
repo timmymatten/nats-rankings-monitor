@@ -1,12 +1,13 @@
 {
+  "checks_paused_until": "2026-06-27T00:00:00-04:00",
   "players": {
     "TIM MATTEN|open": {
       "division": "open",
       "name": "TIM MATTEN",
-      "rank": 230,
-      "rating": 1600.0,
+      "rank": 216,
+      "rating": 1624.29,
       "slack_id": "U07KH5RJ9KR",
-      "tier": "Bronze"
+      "tier": "Silver"
     }
   },
   "top_fingerprint": [
@@ -31,5 +32,5 @@
     "GABE FINOCCHI|2131.72",
     "ZACH SNOVER|2128.04"
   ],
-  "updated_at": "2026-06-24T01:37:45.421685+00:00"
+  "updated_at": "2026-06-24T01:40:12.989438+00:00"
 }
