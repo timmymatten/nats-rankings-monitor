@@ -19,6 +19,7 @@ pauses checks until the following Saturday.
 
 import json
 import os
+import re
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -111,25 +112,48 @@ def load_roster():
 # ------------------------------------------------------------------------ scraping
 
 
+def _first_cell(page, selector):
+    """Text of the current page's first body cell (the rank-1 name), or '' if none."""
+    el = page.query_selector(f"{selector} tbody tr td")
+    return el.inner_text().strip() if el else ""
+
+
 def scrape_division(page, selector):
     """Return {NORMALIZED_NAME: {name, rank, rating, rating_str, tier}} for one table.
 
-    Sets the page size to 100 and clicks through every page. Columns are stable:
-    Name, Rank, Change, Status(tier), Status Expires, Rating, ...
+    Sets the page size to 100 and clicks through every page. Between page clicks it
+    waits for the table to actually re-render (the first row changes) rather than a
+    fixed sleep — shinyapps.io can be slow under load, and a too-short sleep silently
+    truncates the scrape to page 1. Columns are stable: Name, Rank, Change,
+    Status(tier), Status Expires, Rating, ...
     """
     page.wait_for_selector(f"{selector} tbody tr td", timeout=PAGE_TIMEOUT_MS)
+
+    # Total entries from the "Showing 1 to X of N entries" label, so we can wait for
+    # the 100-row page to *fully* render before harvesting (a too-eager wait silently
+    # truncates page 1).
+    total = None
+    info = page.query_selector(f"{selector} .dataTables_info")
+    if info:
+        match = re.search(r"of\s+([\d,]+)\s+entries", info.inner_text())
+        if match:
+            total = int(match.group(1).replace(",", ""))
 
     length_select = page.query_selector(f"{selector} select")
     if length_select:
         try:
             length_select.select_option("100")
-            page.wait_for_timeout(800)
+            target = min(100, total) if total else 100
+            page.wait_for_function(
+                "([sel, t]) => document.querySelectorAll(sel + ' tbody tr').length >= t",
+                arg=[selector, target],
+                timeout=PAGE_TIMEOUT_MS,
+            )
         except Exception:  # noqa: BLE001 — fall back to the default page size
             pass
 
     players = {}
-    seen_pages = 0
-    while True:
+    for _page in range(60):  # safety stop well beyond the real page count
         for row in page.query_selector_all(f"{selector} tbody tr"):
             cells = [c.inner_text().strip() for c in row.query_selector_all("td")]
             if len(cells) < 6:
@@ -149,15 +173,23 @@ def scrape_division(page, selector):
                 "rating_str": rating_s,
                 "tier": tier,
             }
-        seen_pages += 1
 
         nxt = page.query_selector(f"{selector} .paginate_button.next")
         classes = (nxt.get_attribute("class") or "") if nxt else "disabled"
         if not nxt or "disabled" in classes:
             break
+        before = _first_cell(page, selector)
         nxt.click()
-        page.wait_for_timeout(250)
-        if seen_pages > 60:  # safety stop well beyond the real page count
+        # Wait until the first row actually changes (page re-rendered), up to ~12s.
+        try:
+            page.wait_for_function(
+                "([sel, prev]) => {"
+                " const el = document.querySelector(sel + ' tbody tr td');"
+                " return el && el.innerText.trim() !== prev; }",
+                arg=[selector, before],
+                timeout=12_000,
+            )
+        except Exception:  # noqa: BLE001 — page didn't advance; stop paginating
             break
     return players
 
