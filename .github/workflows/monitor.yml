@@ -4,7 +4,12 @@ on:
   schedule:
     # Every 30 minutes.
     - cron: "*/30 * * * *"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Bypass the until-Saturday pause and check now"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -32,6 +37,7 @@ jobs:
       - name: Run monitor
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          FORCE_CHECK: ${{ github.event.inputs.force }}
         run: python monitor.py
 
       - name: Commit snapshot if changed

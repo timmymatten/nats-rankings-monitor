@@ -15,8 +15,9 @@ import json
 import os
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import requests
 from playwright.sync_api import sync_playwright
@@ -31,6 +32,11 @@ TOP_N = 20
 # #player so we never accidentally fingerprint the women's table (they update at
 # the same time, so reading the wrong one would fire a false "updated" alert).
 OPEN_TABLE_SELECTOR = "#player"
+# Tournaments only happen on Saturdays, so after a notification there's nothing to
+# look for until the next Saturday. TIMEZONE defines when that Saturday begins;
+# change this one line to use a different region.
+TIMEZONE = "America/New_York"
+SATURDAY = 5  # datetime.weekday(): Monday=0 … Saturday=5
 
 
 def load_snapshot():
@@ -46,6 +52,42 @@ def save_snapshot(snapshot):
     with open(SNAPSHOT_PATH, "w", encoding="utf-8") as fh:
         json.dump(snapshot, fh, indent=2, sort_keys=True)
         fh.write("\n")
+
+
+def _local_timezone():
+    """Return the configured tz, falling back to UTC on minimal runners."""
+    try:
+        return ZoneInfo(TIMEZONE)
+    except (ZoneInfoNotFoundError, KeyError):
+        return timezone.utc
+
+
+def next_saturday(now):
+    """Return an aware datetime at 00:00 (TIMEZONE) for the next Saturday.
+
+    "Next" is strictly in the future: if `now` is already a Saturday, this jumps a
+    full week ahead. `now` is passed in (not read from the clock) so the date math
+    is unit-testable.
+    """
+    local = now.astimezone(_local_timezone())
+    days = (SATURDAY - local.weekday()) % 7
+    if days == 0:  # today is Saturday → the *following* Saturday
+        days = 7
+    saturday = (local + timedelta(days=days)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    return saturday
+
+
+def is_paused(snapshot, now):
+    """True if the snapshot's pause window is still in the future as of `now`."""
+    paused_until = snapshot.get("checks_paused_until")
+    if not paused_until:
+        return False
+    try:
+        return now < datetime.fromisoformat(paused_until)
+    except ValueError:
+        return False  # unparseable → treat as not paused, resume checking
 
 
 def extract_fingerprint(page):
@@ -114,13 +156,27 @@ def post_to_slack(webhook_url):
 
 
 def main():
+    now = datetime.now(timezone.utc)
+    snapshot = load_snapshot()
+
+    # Tournaments are Saturday-only, so after a notification we pause until the
+    # next Saturday. Bail out before launching the browser when inside that window
+    # (no scrape, no load on the source app, no snapshot change). FORCE_CHECK
+    # (wired from the workflow_dispatch "force" input) overrides the pause.
+    force = os.environ.get("FORCE_CHECK", "").lower() in ("1", "true", "yes")
+    if not force and is_paused(snapshot, now):
+        print(
+            f"Checks paused until {snapshot['checks_paused_until']} "
+            f"(tournaments are Saturdays); skipping."
+        )
+        return 0
+
     try:
         fingerprint = scrape()
     except Exception as exc:  # noqa: BLE001 — any scrape failure is a silent skip
         print(f"Scrape failed, skipping run without touching snapshot: {exc}")
         return 0
 
-    snapshot = load_snapshot()
     previous = snapshot.get("fingerprint")
 
     if previous == fingerprint:
@@ -128,6 +184,11 @@ def main():
         return 0
 
     print("Rankings changed (or first run).")
+
+    new_snapshot = {
+        "fingerprint": fingerprint,
+        "updated_at": now.isoformat(),
+    }
 
     webhook_url = os.environ.get("SLACK_WEBHOOK_URL")
     # Only notify when we have a prior baseline to compare against. The first run
@@ -142,14 +203,15 @@ def main():
                 # Still update the snapshot so we don't repeatedly retry/notify.
         else:
             print("SLACK_WEBHOOK_URL not set; skipping Slack notification.")
+        # A real change means a tournament just happened — pause checks until the
+        # next Saturday's tournament could produce new results.
+        paused_until = next_saturday(now)
+        new_snapshot["checks_paused_until"] = paused_until.isoformat()
+        print(f"Pausing checks until {paused_until.isoformat()}.")
     else:
         print("First run — establishing baseline snapshot without notifying.")
 
-    snapshot = {
-        "fingerprint": fingerprint,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-    }
-    save_snapshot(snapshot)
+    save_snapshot(new_snapshot)
     print("Snapshot updated.")
     return 0
 
