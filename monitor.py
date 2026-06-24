@@ -433,6 +433,14 @@ def main():
     post_public = top_changed or bool(shoutouts)
     channel_text = compose_channel_message(shoutouts) if post_public else None
 
+    # Optional prefix (e.g. "TEST ") for distinguishing test runs in Slack.
+    prefix = os.environ.get("MESSAGE_PREFIX", "")
+    if prefix:
+        if channel_text:
+            channel_text = prefix + channel_text
+        for dm in dms:
+            dm["text"] = prefix + dm["text"]
+
     _report_intent(channel_text, dms)
 
     token = os.environ.get("SLACK_BOT_TOKEN")

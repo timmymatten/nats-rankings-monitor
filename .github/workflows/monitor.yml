@@ -10,6 +10,10 @@ on:
         description: "Bypass the until-Saturday pause and check now"
         type: boolean
         default: false
+      message_prefix:
+        description: "Prefix for Slack messages (e.g. 'TEST ') — leave blank for normal runs"
+        type: string
+        default: ""
 
 permissions:
   contents: write
@@ -39,6 +43,7 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
           FORCE_CHECK: ${{ github.event.inputs.force }}
+          MESSAGE_PREFIX: ${{ github.event.inputs.message_prefix }}
         run: python monitor.py
 
       - name: Commit snapshot if changed
