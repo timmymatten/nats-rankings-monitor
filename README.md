@@ -1,52 +1,93 @@
 # NATS Rankings Monitor
 
-This project watches the [NATS (USA Roundnet) Glicko-2 rankings](https://jmhyman.shinyapps.io/USAR-Rankings/) and posts a Slack notification whenever the top of the **open division** changes. A GitHub Actions workflow runs every 30 minutes: it uses Playwright to scrape the JavaScript-rendered Shiny app, fingerprints the top 20 open-division players' names and ratings, and — if the fingerprint differs from the last run — posts a static message to a Slack Incoming Webhook and commits an updated `snapshot.json`. If nothing changed or the page fails to load, it exits quietly and leaves the snapshot untouched. The only configuration you need is a single GitHub Secret.
+This project watches the [NATS (USA Roundnet) Glicko-2 rankings](https://jmhyman.shinyapps.io/USAR-Rankings/) and, when they change, **posts a public Slack message** (celebrating roster members who got promoted or made contender) and **DMs roster members their personal rating/rank change**. A GitHub Actions workflow runs every 30 minutes: it uses Playwright to scrape the JavaScript-rendered Shiny app across **both** the open and women's divisions, compares against `snapshot.json`, and messages Slack via a **bot token**. If nothing changed or the page fails to load, it exits quietly and leaves the snapshot untouched.
 
-> **Why "open division" specifically:** the Shiny page renders several tables (open lives in the `#player` container, women's in `#playerW`). The scraper scopes to `#player` so it always fingerprints the open division — the two divisions update at the same time, and reading the wrong one would fire a false "updated" alert.
+> **Divisions:** the page renders separate tables — open in the `#player` container (men + women), women's in `#playerW` (women only). The scraper reads both by their stable container IDs (DataTables' auto-assigned table IDs are *not* stable). A player who appears in both divisions is tracked independently in each.
+
+## Who gets notified — roster, DMs, and shoutouts
+
+Notifications are scoped to a **committed roster** (`roster.json`) of people you care about — not all ~1,800 players.
+
+```json
+[
+  { "name": "JANE DOE",    "divisions": ["open", "women"], "slack_id": "U0123ABC" },
+  { "name": "JOHN SMITH",  "divisions": ["open"],          "slack_id": "U0456DEF" },
+  { "name": "NO SLACK GUY", "divisions": ["open"] }
+]
+```
+
+- `name` — matched case-insensitively against the rankings page (names there are uppercase).
+- `divisions` — which tables to track this person in. A woman who plays both gets a **separate DM (and shoutout) per division**.
+- `slack_id` — optional. With it, the person gets **DMs**; without it, they still appear in public **shoutouts** but receive no DM.
+
+What fires on a change:
+- **DM** to each roster member whose **rating or rank** changed, e.g.:
+  > 🏐 Your NATS Open ranking changed!
+  > Rating: 1450 → 1478 (+28)
+  > Rank: 320 → 305
+  > 🎉 Promoted to Silver!
+- **Public channel message** with shoutouts for roster members who were **promoted a tier** (`Unranked→Bronze→Silver→Gold→Pro`, read from the page's Status column) or **made contender** (crossed 1000 rating — **open division only**):
+  > 🏐 NATS Rankings updated!
+  > 🎉 Shoutouts:
+  >  • Jane Doe — promoted to Gold (Open)!
+  >  • John Smith — reached Contender (crossed 1000) in Open!
+  > Check them out: https://www.usaroundnet.org/rankings
+
+Everything is **upward only** — demotions are never reported. Tiers come straight from the page's Status label (rating ranges overlap across tiers, so tier is never inferred from rating).
 
 ## Pausing between tournaments
 
-NATS tournaments only happen on **Saturdays**, so once a change is detected and the Slack notification fires, no new results can appear until the next Saturday's tournament. To avoid pointless scraping (which both burns Action runs and loads the source Shiny app), the monitor **pauses after a notification until the following Saturday**:
+NATS tournaments only happen on **Saturdays**, so once a change is detected, no new results appear until the next Saturday. To avoid pointless scraping, the monitor **pauses after a notification until the following Saturday**: it records a `checks_paused_until` timestamp and, while inside that window, each run exits *before* launching the browser. The `TIMEZONE` constant in `monitor.py` (default `America/New_York`) defines when Saturday begins. The first-run baseline never pauses.
 
-- When a change is detected, the script records a `checks_paused_until` timestamp in `snapshot.json` (next Saturday at 00:00).
-- While inside that window, each run exits immediately — *before* launching the browser — so paused runs are near-instant and touch nothing.
-- Once the window passes, normal 30-minute polling resumes and catches the new tournament's update whenever it lands.
+> If a *correction* is posted later in the same weekend after a notification fired, it won't be picked up until the next Saturday — consistent with the Saturday-only tournament model.
 
-The timezone that defines "Saturday" is the `TIMEZONE` constant in `monitor.py` (default `America/New_York`); change that one line to use a different region. The first-run baseline never pauses.
+## Deploy
 
-> **Note:** if a *correction* to the rankings is posted later in the same weekend (e.g. Sunday) after a notification already fired, it won't be picked up until the next Saturday — consistent with the assumption that meaningful changes only come from Saturday tournaments.
+1. **Fork/clone this repo** (the `rankings_monitor/` contents must sit at the repository root, since `.github/workflows/` only runs from the root).
+2. **Set up the Slack bot** (next section) and get the bot token + channel ID.
+3. **Add two repository secrets** (**Settings → Secrets and variables → Actions → New repository secret**):
+   - `SLACK_BOT_TOKEN` — the bot's `xoxb-…` token
+   - `SLACK_CHANNEL_ID` — the `C…` ID of the channel for the public message
+4. **Fill `roster.json`** with the people you want to track (see above). Use `tools/list_slack_users.py` to look up member IDs, then `tools/validate_roster.py` to confirm every name matches the rankings.
+5. **Enable workflows** in the **Actions** tab if prompted.
+6. **Done.** Runs every 30 minutes. The first run establishes a baseline silently (no messages); after that it only notifies on real changes.
 
-## Deploy in under five minutes
+## Setting up the Slack bot
 
-1. **Fork this repo** (or copy the `rankings_monitor/` contents into your own repo — it must sit at the repository root, since `.github/workflows/` only runs from the root).
-2. **Create a Slack Incoming Webhook** (see below) and copy its URL.
-3. **Add the webhook as a secret:** in your repo go to **Settings → Secrets and variables → Actions → New repository secret**. Name it exactly `SLACK_WEBHOOK_URL` and paste the webhook URL as the value.
-4. **Enable workflows:** open the **Actions** tab. If prompted with "Workflows aren't being run on this forked repository," click **I understand my workflows, go ahead and enable them**.
-5. **Done.** The monitor now runs automatically every 30 minutes.
+DMs are impossible with an Incoming Webhook, so this uses a bot token.
 
-The very first run establishes a baseline snapshot without sending a notification, so you won't get a spurious alert on day one. Every run after that notifies only when the rankings actually change.
+1. Go to <https://api.slack.com/apps> → **Create New App → From scratch**, name it (e.g. "NATS Rankings Bot"), pick your workspace.
+2. **OAuth & Permissions → Scopes → Bot Token Scopes**, add:
+   - `chat:write` — post the channel message and DMs
+   - `im:write` — open a DM with each person
+   - `users:read` — lets the helper script list members
+3. **Install to Workspace → Allow.** Copy the **Bot User OAuth Token** (`xoxb-…`) → this is `SLACK_BOT_TOKEN`.
+4. **Invite the bot to your channel:** in Slack, `/invite @YourBot` in the target channel (the bot must be a member to post).
+5. **Get the channel ID:** click the channel name → bottom of the **About** tab shows **Channel ID** (`C…`), or take the `C…` from the channel URL. This is `SLACK_CHANNEL_ID`.
 
-## Creating the Slack Incoming Webhook
+### Finding member IDs for the roster
 
-1. Go to <https://api.slack.com/apps> (**Settings → Your apps**).
-2. Click **Create app → From scratch**, give it a name (e.g. "NATS Rankings"), pick your workspace, and create it.
-3. In the app settings, open **Incoming Webhooks** and toggle **Activate Incoming Webhooks** on.
-4. Click **Add New Webhook to Workspace**, choose the channel to post into, and **Allow**.
-5. Copy the generated **Webhook URL** (looks like `https://hooks.slack.com/services/T000/B000/XXXX`). Use this as your `SLACK_WEBHOOK_URL` secret.
+```bash
+# List everyone, or pass SLACK_CHANNEL_ID to narrow to one channel's members
+SLACK_BOT_TOKEN=xoxb-... python tools/list_slack_users.py
+SLACK_BOT_TOKEN=xoxb-... SLACK_CHANNEL_ID=C0123ABCD python tools/list_slack_users.py
+```
+Prints `Real Name -> U-ID`. (Channel-narrowing also needs a `channels:read`/`groups:read` scope; without it the script lists the whole workspace.) You can also copy an ID manually from a person's Slack profile → **⋮ More → Copy member ID**.
 
-When the rankings change, the channel receives:
+### Validating the roster
 
-> 🏐 NATS Rankings updated!
-> Check them out: https://www.usaroundnet.org/rankings
+Player names must match the rankings page exactly (after uppercasing + collapsing whitespace). Matching at runtime is **exact, never fuzzy** — a wrong guess could DM the wrong person — so a name that doesn't match is simply logged and skipped. Catch mismatches *before* deploying:
+
+```bash
+python tools/validate_roster.py
+```
+It scrapes both divisions and, for every entry, prints ✓ with the player's rank/rating/tier or ✗ with the closest suggested spellings (handy for nicknames, accents like `JÉ GAGNON`, typos, or `JR.` punctuation). It also flags a name that appears in a division you didn't list. Copying names **directly from the rankings page** avoids mismatches entirely.
 
 ## Manually triggering a run
 
-1. Open the **Actions** tab.
-2. Select the **NATS Rankings Monitor** workflow in the left sidebar.
-3. Click **Run workflow**, pick the branch (usually `main`), and click the green **Run workflow** button.
-   - If checks are currently paused between tournaments (see above), toggle **Bypass the until-Saturday pause and check now** on to force a check anyway. Leave it off to respect the pause.
-
-The run appears in the list within a few seconds; click it to watch the logs.
+**Actions** tab → **NATS Rankings Monitor** → **Run workflow** → pick the branch → **Run workflow**. Two optional inputs:
+- **Bypass the until-Saturday pause and check now** — toggle on to force a check while paused between tournaments.
+- **message_prefix** — text prepended to every Slack message (e.g. `TEST `) so test runs are obviously distinguishable from real ones. Leave blank for normal runs; scheduled runs never set it.
 
 ## Adjusting the schedule
 
@@ -56,11 +97,11 @@ The cadence is the `cron` line in `.github/workflows/monitor.yml`:
 - cron: "*/30 * * * *"   # every 30 minutes
 ```
 
-Change it to suit (`0 * * * *` hourly, `0 */6 * * *` every 6 hours). Note that on a **private** repo, Actions minutes count against your monthly allowance (each run is billed as ~1 minute), so every 30 minutes is ~1,440 min/month — comfortably under the 2,000-minute free tier but worth keeping in mind. On a **public** repo, Actions minutes are unlimited and free.
+On a **private** repo, Actions minutes count against your allowance (~1 min/run → ~1,440 min/month at 30-minute cadence, under the 2,000-minute free tier). On a **public** repo, Actions minutes are unlimited and free.
 
 ## How state works
 
-`snapshot.json` (initialized as `{}`) stores the latest fingerprint, a UTC timestamp, and — after a notification — a `checks_paused_until` timestamp (see [Pausing between tournaments](#pausing-between-tournaments)). After each run the workflow checks `git diff snapshot.json` and only commits + pushes when it changed. Commits use the `github-actions[bot]` identity and include `[skip ci]` so the push doesn't re-trigger the workflow.
+`snapshot.json` (initialized as `{}`) stores `top_fingerprint` (open top-20, the general-update + pause trigger), `players` (per-roster-member records keyed by `NAME|division` with rank/rating/tier), a UTC `updated_at`, and — after a notification — `checks_paused_until`. After each run the workflow checks `git diff snapshot.json` and only commits + pushes when it changed, using the `github-actions[bot]` identity with `[skip ci]` so the push doesn't re-trigger the workflow. The legacy `{fingerprint,…}` schema auto-migrates: the first run under the new code establishes the new-schema baseline silently.
 
 ## Local testing
 
@@ -68,6 +109,7 @@ Change it to suit (`0 * * * *` hourly, `0 */6 * * *` every 6 hours). Note that o
 cd rankings_monitor
 pip install -r requirements.txt
 playwright install chromium
-export SLACK_WEBHOOK_URL="https://hooks.slack.com/services/..."  # optional
+# Without SLACK_BOT_TOKEN, the script prints the channel message + intended DMs
+# instead of sending — handy for previewing wording.
 python monitor.py
 ```
