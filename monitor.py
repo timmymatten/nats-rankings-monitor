@@ -118,16 +118,55 @@ def _first_cell(page, selector):
     return el.inner_text().strip() if el else ""
 
 
+# Body columns are read by HEADER LABEL, not by fixed index, so the scrape survives
+# columns being inserted/reordered upstream (e.g. a "Contender Status" column was added
+# between "Status Expires" and "Rating" in July 2026, which silently shifted Rating and
+# broke the old cells[5] parser). "Status" is the tier label; "Rating" is the numeric
+# rating. We only need these four; extra columns are ignored.
+REQUIRED_COLUMNS = ("Name", "Rank", "Status", "Rating")
+
+
+def _column_index(page, selector):
+    """Map header label → column index from the table's first header row.
+
+    Raises RuntimeError if any REQUIRED_COLUMNS is missing — a loud, diagnostic
+    failure (surfaced via the scrape-failure log) rather than a silently empty scrape.
+    """
+    header_row = page.query_selector(f"{selector} thead tr")
+    ths = header_row.query_selector_all("th") if header_row else []
+    cols = {}
+    for i, th in enumerate(ths):
+        label = th.inner_text().strip()
+        if label and label not in cols:  # keep first occurrence; skip spacer columns
+            cols[label] = i
+    missing = [c for c in REQUIRED_COLUMNS if c not in cols]
+    if missing:
+        raise RuntimeError(
+            f"Rankings table for {selector} is missing expected column(s) {missing}; "
+            f"saw headers {list(cols)}"
+        )
+    return cols
+
+
 def scrape_division(page, selector):
     """Return {NORMALIZED_NAME: {name, rank, rating, rating_str, tier}} for one table.
 
     Sets the page size to 100 and clicks through every page. Between page clicks it
     waits for the table to actually re-render (the first row changes) rather than a
     fixed sleep — shinyapps.io can be slow under load, and a too-short sleep silently
-    truncates the scrape to page 1. Columns are stable: Name, Rank, Change,
-    Status(tier), Status Expires, Rating, ...
+    truncates the scrape to page 1. Columns are located by header label (see
+    _column_index) so upstream column insertions/reorders don't break the parser.
     """
     page.wait_for_selector(f"{selector} tbody tr td", timeout=PAGE_TIMEOUT_MS)
+
+    cols = _column_index(page, selector)
+    name_i, rank_i, tier_i, rating_i = (
+        cols["Name"],
+        cols["Rank"],
+        cols["Status"],
+        cols["Rating"],
+    )
+    min_cells = max(name_i, rank_i, tier_i, rating_i) + 1
 
     # Total entries from the "Showing 1 to X of N entries" label, so we can wait for
     # the 100-row page to *fully* render before harvesting (a too-eager wait silently
@@ -156,9 +195,14 @@ def scrape_division(page, selector):
     for _page in range(60):  # safety stop well beyond the real page count
         for row in page.query_selector_all(f"{selector} tbody tr"):
             cells = [c.inner_text().strip() for c in row.query_selector_all("td")]
-            if len(cells) < 6:
+            if len(cells) < min_cells:
                 continue
-            name, rank_s, tier, rating_s = cells[0], cells[1], cells[3], cells[5]
+            name, rank_s, tier, rating_s = (
+                cells[name_i],
+                cells[rank_i],
+                cells[tier_i],
+                cells[rating_i],
+            )
             try:
                 rank = int(rank_s.replace(",", ""))
                 rating = float(rating_s.replace(",", ""))
