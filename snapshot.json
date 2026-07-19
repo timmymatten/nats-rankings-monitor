@@ -1,5 +1,5 @@
 {
-  "checks_paused_until": "2026-07-18T00:00:00-04:00",
+  "checks_paused_until": "2026-07-25T00:00:00-04:00",
   "players": {
     "ABIGALE LAMONTAGNE|open": {
       "division": "open",
@@ -17,14 +17,6 @@
       "slack_id": "U02DUEG89JP",
       "tier": "Pro"
     },
-    "AHMED OTHMAN|open": {
-      "division": "open",
-      "name": "AHMED OTHMAN",
-      "rank": 1194,
-      "rating": 1157.89,
-      "slack_id": "U09FTBU8R7S",
-      "tier": "Unranked"
-    },
     "AIDAN SPROULS|open": {
       "division": "open",
       "name": "AIDAN SPROULS",
@@ -32,22 +24,6 @@
       "rating": 1651.71,
       "slack_id": "U07LBT81073",
       "tier": "Silver"
-    },
-    "ALEC MERTZ|open": {
-      "division": "open",
-      "name": "ALEC MERTZ",
-      "rank": 831,
-      "rating": 1287.85,
-      "slack_id": "U0A7RKS4J6Q",
-      "tier": "Unranked"
-    },
-    "ANDREW LENNARTZ|open": {
-      "division": "open",
-      "name": "ANDREW LENNARTZ",
-      "rank": 1226,
-      "rating": 1140.9,
-      "slack_id": "U09DBKUQ753",
-      "tier": "Unranked"
     },
     "ANDREW NEE|open": {
       "division": "open",
@@ -81,14 +57,6 @@
       "slack_id": "U02AUN37DRS",
       "tier": "Silver"
     },
-    "CHARLOTTE SUMNER|open": {
-      "division": "open",
-      "name": "CHARLOTTE SUMNER",
-      "rank": 1036,
-      "rating": 1213.61,
-      "slack_id": "U09DE91E6D8",
-      "tier": "Unranked"
-    },
     "DANIEL VOGT|open": {
       "division": "open",
       "name": "DANIEL VOGT",
@@ -97,36 +65,12 @@
       "slack_id": "U07KTL4RUSJ",
       "tier": "Bronze"
     },
-    "DAVID ALBERINO JR.|open": {
-      "division": "open",
-      "name": "DAVID ALBERINO JR.",
-      "rank": 1021,
-      "rating": 1217.41,
-      "slack_id": "U09DTBJ1YF3",
-      "tier": "Unranked"
-    },
     "ELISE WHELAN|women": {
       "division": "women",
       "name": "ELISE WHELAN",
       "rank": 157,
       "rating": 601.63,
       "slack_id": "U05S8CPV77Y",
-      "tier": "Unranked"
-    },
-    "FINN DUNNE|open": {
-      "division": "open",
-      "name": "FINN DUNNE",
-      "rank": 1040,
-      "rating": 1211.45,
-      "slack_id": "U09DL3ZEF3P",
-      "tier": "Unranked"
-    },
-    "HANNAH RADELL|open": {
-      "division": "open",
-      "name": "HANNAH RADELL",
-      "rank": 1417,
-      "rating": 1070.13,
-      "slack_id": "U041HHKHG3W",
       "tier": "Unranked"
     },
     "HANNAH RADELL|women": {
@@ -145,14 +89,6 @@
       "slack_id": "U02DP1ZFCJF",
       "tier": "Gold"
     },
-    "JEFFREY RODRIGO|open": {
-      "division": "open",
-      "name": "JEFFREY RODRIGO",
-      "rank": 1675,
-      "rating": 961.15,
-      "slack_id": "U09DA12RDRR",
-      "tier": "Unranked"
-    },
     "JOANNA GOULD|open": {
       "division": "open",
       "name": "JOANNA GOULD",
@@ -169,30 +105,6 @@
       "slack_id": "U0B4DM3FQKE",
       "tier": "Pro"
     },
-    "KYLE S|open": {
-      "division": "open",
-      "name": "KYLE S",
-      "rank": 1227,
-      "rating": 1140.9,
-      "slack_id": "U09DU58SRMF",
-      "tier": "Unranked"
-    },
-    "LAVI HALWAWALA|open": {
-      "division": "open",
-      "name": "LAVI HALWAWALA",
-      "rank": 1676,
-      "rating": 961.15,
-      "slack_id": "U09E2CQDZ4Z",
-      "tier": "Unranked"
-    },
-    "LIA MAAG|open": {
-      "division": "open",
-      "name": "LIA MAAG",
-      "rank": 689,
-      "rating": 1338.38,
-      "slack_id": "U043X00KQ3V",
-      "tier": "Bronze"
-    },
     "LIA MAAG|women": {
       "division": "women",
       "name": "LIA MAAG",
@@ -200,14 +112,6 @@
       "rating": 1071.32,
       "slack_id": "U043X00KQ3V",
       "tier": "Silver"
-    },
-    "LILIKO UCHIDA|open": {
-      "division": "open",
-      "name": "LILIKO UCHIDA",
-      "rank": 1669,
-      "rating": 962.96,
-      "slack_id": "U09J3BE1YFP",
-      "tier": "Unranked"
     },
     "LILIKO UCHIDA|women": {
       "division": "women",
@@ -257,14 +161,6 @@
       "slack_id": "U02DNC0RQK1",
       "tier": "Gold"
     },
-    "SADIE BERES|open": {
-      "division": "open",
-      "name": "SADIE BERES",
-      "rank": 797,
-      "rating": 1301.71,
-      "slack_id": "U07LFEU1SPL",
-      "tier": "Unranked"
-    },
     "SADIE BERES|women": {
       "division": "women",
       "name": "SADIE BERES",
@@ -281,14 +177,6 @@
       "slack_id": "U041DV5861K",
       "tier": "Gold"
     },
-    "STANLEY SITU|open": {
-      "division": "open",
-      "name": "STANLEY SITU",
-      "rank": 1514,
-      "rating": 1038.71,
-      "slack_id": "U09E2CKP4AV",
-      "tier": "Unranked"
-    },
     "SUNNY GU|open": {
       "division": "open",
       "name": "SUNNY GU",
@@ -297,14 +185,6 @@
       "slack_id": "U02DJHJLF1T",
       "tier": "Pro"
     },
-    "TAVIS LIE|open": {
-      "division": "open",
-      "name": "TAVIS LIE",
-      "rank": 1266,
-      "rating": 1129.75,
-      "slack_id": "U09EFTKKUG0",
-      "tier": "Unranked"
-    },
     "TIM MATTEN|open": {
       "division": "open",
       "name": "TIM MATTEN",
@@ -312,22 +192,6 @@
       "rating": 1624.09,
       "slack_id": "U07KH5RJ9KR",
       "tier": "Silver"
-    },
-    "TYRUS KAMENITZER|open": {
-      "division": "open",
-      "name": "TYRUS KAMENITZER",
-      "rank": 793,
-      "rating": 1303.87,
-      "slack_id": "U05RR1STS5D",
-      "tier": "Unranked"
-    },
-    "XAVIER GRAZADO|open": {
-      "division": "open",
-      "name": "XAVIER GRAZADO",
-      "rank": 896,
-      "rating": 1267.2,
-      "slack_id": "U09DGV1D4F6",
-      "tier": "Unranked"
     }
   },
   "top_fingerprint": [
@@ -352,5 +216,5 @@
     "ZACH SNOVER|2128.05",
     "NATHAN ROBERTT|2120.77"
   ],
-  "updated_at": "2026-07-16T16:20:11.849873+00:00"
+  "updated_at": "2026-07-19T18:29:19.061379+00:00"
 }
