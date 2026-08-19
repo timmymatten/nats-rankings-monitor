@@ -8,22 +8,20 @@ open and women's divisions, then:
   - DMs each roster member their own rating/rank change.
 
 State (a per-player snapshot keyed by name+division, plus a top-20 fingerprint that
-drives the general-update + pause logic) lives in snapshot.json. All Slack messaging
-uses a bot token (DMs are impossible with an Incoming Webhook).
+drives the general-update trigger) lives in snapshot.json. All Slack messaging uses
+a bot token (DMs are impossible with an Incoming Webhook).
 
 On any scrape failure the script prints the error and exits 0 without touching the
 snapshot — a transient failure should never fire a false notification or fail the
-GitHub Action. Tournaments are Saturday-only, so after a notification the monitor
-pauses checks until the following Saturday.
+GitHub Action.
 """
 
 import json
 import os
 import re
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import requests
 from playwright.sync_api import sync_playwright
@@ -47,11 +45,6 @@ TIER_ORDER = ["Unranked", "Bronze", "Silver", "Gold", "Pro"]
 # "Contender" is a milestone (rating crossing 1000), distinct from the tier label,
 # and is only announced for the OPEN division.
 CONTENDER_THRESHOLD = 1000.0
-
-# Tournaments only happen on Saturdays, so after a notification there's nothing to
-# look for until the next Saturday. TIMEZONE defines when that Saturday begins.
-TIMEZONE = "America/New_York"
-SATURDAY = 5  # datetime.weekday(): Monday=0 … Saturday=5
 
 SLACK_API = "https://slack.com/api"
 
@@ -257,7 +250,7 @@ def scrape():
 
 
 def top_fingerprint(open_players):
-    """Top-N open-division 'NAME|rating' list — the general-update + pause trigger."""
+    """Top-N open-division 'NAME|rating' list — the general-update trigger."""
     rows = sorted(open_players.values(), key=lambda r: r["rank"])[:TOP_N]
     return [f"{r['name']}|{r['rating_str']}" for r in rows]
 
@@ -415,36 +408,6 @@ def send_dm(token, user_id, text):
 # ---------------------------------------------------------------------------- main
 
 
-def _local_timezone():
-    """Return the configured tz, falling back to UTC on minimal runners."""
-    try:
-        return ZoneInfo(TIMEZONE)
-    except (ZoneInfoNotFoundError, KeyError):
-        return timezone.utc
-
-
-def next_saturday(now):
-    """Aware datetime at 00:00 (TIMEZONE) for the next (strictly future) Saturday."""
-    local = now.astimezone(_local_timezone())
-    days = (SATURDAY - local.weekday()) % 7
-    if days == 0:  # today is Saturday → the *following* Saturday
-        days = 7
-    return (local + timedelta(days=days)).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
-
-
-def is_paused(snapshot, now):
-    """True if the snapshot's pause window is still in the future as of `now`."""
-    paused_until = snapshot.get("checks_paused_until")
-    if not paused_until:
-        return False
-    try:
-        return now < datetime.fromisoformat(paused_until)
-    except ValueError:
-        return False  # unparseable → treat as not paused, resume checking
-
-
 def _report_intent(channel_text, dms):
     """Print exactly what would be sent (used both for dry runs and as a run log)."""
     print("\n--- channel message ---")
@@ -464,16 +427,6 @@ def main():
     snapshot = load_snapshot()
     roster = load_roster()
 
-    # Saturday-only pause: bail before launching the browser inside the window.
-    # FORCE_CHECK (workflow_dispatch "force" input) overrides it.
-    force = os.environ.get("FORCE_CHECK", "").lower() in ("1", "true", "yes")
-    if not force and is_paused(snapshot, now):
-        print(
-            f"Checks paused until {snapshot['checks_paused_until']} "
-            f"(tournaments are Saturdays); skipping."
-        )
-        return 0
-
     try:
         scraped = scrape()
     except Exception as exc:  # noqa: BLE001 — any scrape failure is a silent skip
@@ -489,7 +442,7 @@ def main():
     }
 
     # First run under this schema (also catches the legacy {fingerprint,…} snapshot):
-    # establish the baseline silently, no notifications, no pause.
+    # establish the baseline silently, no notifications.
     if "top_fingerprint" not in snapshot:
         save_snapshot(new_snapshot)
         print("First run — established baseline snapshot without notifying.")
@@ -542,11 +495,8 @@ def main():
     else:
         print("SLACK_BOT_TOKEN not set; skipped sending (intent shown above).")
 
-    # A real change means a tournament happened — pause until the next Saturday.
-    paused_until = next_saturday(now)
-    new_snapshot["checks_paused_until"] = paused_until.isoformat()
     save_snapshot(new_snapshot)
-    print(f"Snapshot updated. Pausing checks until {paused_until.isoformat()}.")
+    print("Snapshot updated.")
     return 0
 
 

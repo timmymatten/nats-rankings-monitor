@@ -35,12 +35,6 @@ What fires on a change:
 
 Everything is **upward only** — demotions are never reported. Tiers come straight from the page's Status label (rating ranges overlap across tiers, so tier is never inferred from rating).
 
-## Pausing between tournaments
-
-NATS tournaments only happen on **Saturdays**, so once a change is detected, no new results appear until the next Saturday. To avoid pointless scraping, the monitor **pauses after a notification until the following Saturday**: it records a `checks_paused_until` timestamp and, while inside that window, each run exits *before* launching the browser. The `TIMEZONE` constant in `monitor.py` (default `America/New_York`) defines when Saturday begins. The first-run baseline never pauses.
-
-> If a *correction* is posted later in the same weekend after a notification fired, it won't be picked up until the next Saturday — consistent with the Saturday-only tournament model.
-
 ## Deploy
 
 1. **Fork/clone this repo** (the `rankings_monitor/` contents must sit at the repository root, since `.github/workflows/` only runs from the root).
@@ -85,8 +79,7 @@ It scrapes both divisions and, for every entry, prints ✓ with the player's ran
 
 ## Manually triggering a run
 
-**Actions** tab → **NATS Rankings Monitor** → **Run workflow** → pick the branch → **Run workflow**. Two optional inputs:
-- **Bypass the until-Saturday pause and check now** — toggle on to force a check while paused between tournaments.
+**Actions** tab → **NATS Rankings Monitor** → **Run workflow** → pick the branch → **Run workflow**. One optional input:
 - **message_prefix** — text prepended to every Slack message (e.g. `TEST `) so test runs are obviously distinguishable from real ones. Leave blank for normal runs; scheduled runs never set it.
 
 ## Adjusting the schedule
@@ -101,7 +94,7 @@ On a **private** repo, Actions minutes count against your allowance (~1 min/run 
 
 ## How state works
 
-`snapshot.json` (initialized as `{}`) stores `top_fingerprint` (open top-20, the general-update + pause trigger), `players` (per-roster-member records keyed by `NAME|division` with rank/rating/tier), a UTC `updated_at`, and — after a notification — `checks_paused_until`. After each run the workflow checks `git diff snapshot.json` and only commits + pushes when it changed, using the `github-actions[bot]` identity with `[skip ci]` so the push doesn't re-trigger the workflow. The legacy `{fingerprint,…}` schema auto-migrates: the first run under the new code establishes the new-schema baseline silently.
+`snapshot.json` (initialized as `{}`) stores `top_fingerprint` (open top-20, the general-update trigger), `players` (per-roster-member records keyed by `NAME|division` with rank/rating/tier), and a UTC `updated_at`. After each run the workflow checks `git diff snapshot.json` and only commits + pushes when it changed, using the `github-actions[bot]` identity with `[skip ci]` so the push doesn't re-trigger the workflow. The legacy `{fingerprint,…}` schema auto-migrates: the first run under the new code establishes the new-schema baseline silently.
 
 ## Local testing
 
